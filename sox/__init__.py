@@ -21,3 +21,4 @@ from .combine import Combiner
 from .transform import Transformer
 from .core import SoxError
 from .core import SoxiError
+from . import tools
