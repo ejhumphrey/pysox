@@ -15,4 +15,4 @@ OUTPUT_FILE = relpath('data/output.wav')
 class TestTools(unittest.TestCase):
 
     def test_trim(self):
-        self.assertEqual(sox.tools.trim(INPUT_FILE, OUTPUT_FILE, 0, 1.5))
+        self.assertTrue(sox.tools.trim(INPUT_FILE, OUTPUT_FILE, 0, 1.5))
