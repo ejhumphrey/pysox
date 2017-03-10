@@ -1,7 +1,7 @@
+#!/usr/bin/env python
 """ init method for sox module """
 import logging
 import os
-logging.basicConfig(level=logging.DEBUG)
 
 # Check that SoX is installed and callable
 NO_SOX = False
@@ -21,3 +21,5 @@ from .combine import Combiner
 from .transform import Transformer
 from .core import SoxError
 from .core import SoxiError
+from . import tools
+from .version import version as __version__

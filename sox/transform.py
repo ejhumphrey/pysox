@@ -19,8 +19,6 @@ from .core import VALID_FORMATS
 
 from . import file_info
 
-logging.basicConfig(level=logging.DEBUG)
-
 VERBOSITY_VALS = [0, 1, 2, 3, 4]
 
 
@@ -874,7 +872,8 @@ class Transformer(object):
         return self
 
     def compand(self, attack_time=0.3, decay_time=0.8, soft_knee_db=6.0,
-                tf_points=[(-70, -70), (-60, -20), (0, 0)]):
+                tf_points=[(-70, -70), (-60, -20), (0, 0)],
+                ):
         '''Compand (compress or expand) the dynamic range of the audio.
 
         Parameters
@@ -1663,7 +1662,8 @@ class Transformer(object):
                  attack_time=[0.005, 0.000625], decay_time=[0.1, 0.0125],
                  soft_knee_db=[6.0, None],
                  tf_points=[[(-47, -40), (-34, -34), (-17, -33), (0, 0)],
-                 [(-47, -40), (-34, -34), (-15, -33), (0, 0)]]):
+                 [(-47, -40), (-34, -34), (-15, -33), (0, 0)]],
+                 gain=[None, None]):
 
         '''The multi-band compander is similar to the single-band compander but
         the audio is first divided into bands using Linkwitz-Riley cross-over
@@ -1702,6 +1702,9 @@ class Transformer(object):
             function points as a list of tuples corresponding to points in
             (dB, dB) defining the compander's transfer function over the
             current band.
+        gain : list of floats or None
+            A list of gain values for each frequency band.
+            If None, no gain is applied.
 
         See Also
         --------
@@ -1774,6 +1777,13 @@ class Transformer(object):
             if len(tf_points) > len(set([p[0] for p in tfp])):
                 raise ValueError("Found duplicate x-value in tf_points list.")
 
+        if not isinstance(gain, list) or len(gain) != n_bands:
+            raise ValueError("gain must be a list of length n_bands")
+
+        if any([not (is_number(g) or g is None) for g in gain]):
+            print(gain)
+            raise ValueError("gain elements must be numbers or None.")
+
         effect_args = ['mcompand']
 
         for i in range(n_bands):
@@ -1800,6 +1810,9 @@ class Transformer(object):
                 )
             else:
                 intermed_args.append(",".join(transfer_list))
+
+            if gain[i] is not None:
+                intermed_args.append("{}".format(gain[i]))
 
             effect_args.append('"{}"'.format(' '.join(intermed_args)))
 
@@ -2059,8 +2072,84 @@ class Transformer(object):
 
         return self
 
-    def remix(self):
-        raise NotImplementedError
+    def remix(self, remix_dictionary=None, num_output_channels=None):
+        '''Remix the channels of an audio file.
+
+        Note: volume options are not yet implemented
+
+        Parameters
+        ----------
+        remix_dictionary : dict or None
+            Dictionary mapping output channel to list of input channel(s).
+            Empty lists indicate the corresponding output channel should be
+            empty. If None, mixes all channels down to a single mono file.
+        num_output_channels : int or None
+            The number of channels in the output file. If None, the number of
+            output channels is equal to the largest key in remix_dictionary.
+            If remix_dictionary is None, this variable is ignored.
+
+        Examples
+        --------
+        Remix a 4-channel input file. The output file will have
+        input channel 2 in channel 1, a mixdown of input channels 1 an 3 in
+        channel 2, an empty channel 3, and a copy of input channel 4 in
+        channel 4.
+
+        >>> import sox
+        >>> tfm = sox.Transformer()
+        >>> remix_dictionary = {1: [2], 2: [1, 3], 4: [4]}
+        >>> tfm.remix(remix_dictionary)
+
+        '''
+        if not (isinstance(remix_dictionary, dict) or remix_dictionary is None):
+            raise ValueError("remix_dictionary must be a dictionary or None.")
+
+        if remix_dictionary is not None:
+
+            if not all([isinstance(i, int) and i > 0 for i
+                        in remix_dictionary.keys()]):
+                raise ValueError(
+                    "remix dictionary must have positive integer keys."
+                )
+
+            if not all([isinstance(v, list) for v
+                        in remix_dictionary.values()]):
+                raise ValueError("remix dictionary values must be lists.")
+
+            for v_list in remix_dictionary.values():
+                if not all([isinstance(v, int) and v > 0 for v in v_list]):
+                    raise ValueError(
+                        "elements of remix dictionary values must "
+                        "be positive integers"
+                    )
+
+        if not ((isinstance(num_output_channels, int) and
+                 num_output_channels > 0) or num_output_channels is None):
+            raise ValueError(
+                "num_output_channels must be a positive integer or None."
+            )
+
+        effect_args = ['remix']
+        if remix_dictionary is None:
+            effect_args.append('-')
+        else:
+            if num_output_channels is None:
+                num_output_channels = max(remix_dictionary.keys())
+
+            for channel in range(1, num_output_channels + 1):
+                if channel in remix_dictionary.keys():
+                    out_channel = ','.join(
+                        [str(i) for i in remix_dictionary[channel]]
+                    )
+                else:
+                    out_channel = '0'
+
+                effect_args.append(out_channel)
+
+        self.effects.extend(effect_args)
+        self.effects_log.append('remix')
+
+        return self
 
     def repeat(self, count=1):
         '''Repeat the entire audio count times.
